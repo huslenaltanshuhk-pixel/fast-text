@@ -24,3 +24,24 @@ export interface GameStats {
   totalCharsTyped: number;
   timeElapsed: number; // in seconds
 }
+
+export interface MultiplayerPlayer {
+  id: string;
+  name: string;
+  vehicle: VehicleType;
+  progress: number;
+  wpm: number;
+  isFinished: boolean;
+  finishTime?: number;
+  accuracy?: number;
+  ready: boolean;
+  isHost: boolean;
+}
+
+export interface ChatMessage {
+  senderId: string;
+  senderName: string;
+  message: string;
+  timestamp: number;
+}
+

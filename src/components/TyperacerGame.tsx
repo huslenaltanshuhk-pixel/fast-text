@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, VehicleType, GameStats, WpmHistoryPoint, Paragraph } from '../types';
+import { GameState, VehicleType, GameStats, WpmHistoryPoint, Paragraph, MultiplayerPlayer, ChatMessage } from '../types';
 import { PARAGRAPHS } from '../data/paragraphs';
 import { Track } from './Track';
 import { StatsPanel } from './StatsPanel';
@@ -166,7 +166,36 @@ const TRANSLATIONS = {
     enterNameTitle: 'УРАЛДААНЧИЙН НЭРЭЭ ОРУУЛНА ҮҮ',
     enterNamePlaceholder: 'Таны уралдаанчийн нэр...',
     enterNameBtn: 'БАТЛАХ БА ЭХЛҮҮЛЭХ',
-    enterNameError: 'Нэрээ оруулна уу (дээд тал нь 25 тэмдэгт)'
+    enterNameError: 'Нэрээ оруулна уу (дээд тал нь 25 тэмдэгт)',
+    gameMode: 'УРАЛДААНЫ ХУГАЦАА:',
+    normalMode: 'Төгсгөлгүй',
+    fiveMinMode: '5 Минут',
+    tenMinMode: '10 Минут',
+    timeLeft: 'ҮЛДСЭН ХУГАЦАА',
+    multiplayerTabSingle: '🤖 Ганцаарчилсан',
+    multiplayerTabMulti: '👥 Онлайн уралдаан',
+    multiplayerLobbyTitle: 'ОНЛАЙН ЛОББИ',
+    multiplayerLobbySubtitle: 'Хамтдаа уралдаж, хурдаа сорих хэсэг',
+    multiplayerEnterNickname: 'Уралдаанчийн нэр:',
+    multiplayerQuickMatch: 'Шууд холбогдох (Нийтийн уралдаан)',
+    multiplayerQuickMatchDesc: 'Нийтийн өрөөнд бусад уралдаанчидтай шууд таарч хурдаа сорино.',
+    multiplayerCreatePrivate: 'Хувийн өрөө үүсгэх',
+    multiplayerCreatePrivateDesc: 'Найзуудтайгаа тоглохын тулд тусгай нууц кодтой өрөө үүсгэнэ.',
+    multiplayerJoinPrivate: 'Хувийн өрөөнд орох',
+    multiplayerEnterCode: 'Өрөөний код:',
+    multiplayerBtnJoin: 'Орох',
+    multiplayerLobbyPlayers: 'Өрөөнд байгаа уралдаанчид:',
+    multiplayerReady: 'Бэлэн',
+    multiplayerUnready: 'Бэлэн биш',
+    multiplayerStart: 'Уралдаан эхлүүлэх',
+    multiplayerChatTitle: 'Өрөөний чат',
+    multiplayerChatPlaceholder: 'Энд зурвас бичнэ үү...',
+    multiplayerWaitingPlayers: 'Бусад уралдаанчдыг хүлээж байна...',
+    multiplayerCountdown: 'Уралдаан {seconds} секундэд эхэлнэ...',
+    multiplayerHost: 'Зохион байгуулагч',
+    multiplayerLeave: 'Өрөөнөөс гарах',
+    multiplayerResultsLeaderboard: 'УРАЛДААНЫ ДҮН',
+    multiplayerPlayAgain: 'Дахин уралдах / Өрөөнд буцах'
   },
   en: {
     title: 'TypeRacer MN/EN',
@@ -218,7 +247,36 @@ const TRANSLATIONS = {
     enterNameTitle: 'ENTER YOUR RACER NAME',
     enterNamePlaceholder: 'Racer name...',
     enterNameBtn: 'SAVE & START RACE',
-    enterNameError: 'Please enter a name (max 25 characters)'
+    enterNameError: 'Please enter a name (max 25 characters)',
+    gameMode: 'RACE DURATION:',
+    normalMode: 'No Limit',
+    fiveMinMode: '5 Minutes',
+    tenMinMode: '10 Minutes',
+    timeLeft: 'TIME LEFT',
+    multiplayerTabSingle: '🤖 Single Player',
+    multiplayerTabMulti: '👥 Multiplayer',
+    multiplayerLobbyTitle: 'ONLINE LOBBY',
+    multiplayerLobbySubtitle: 'Race against real-time online players',
+    multiplayerEnterNickname: 'Racer Nickname:',
+    multiplayerQuickMatch: 'Quick Match (Public)',
+    multiplayerQuickMatchDesc: 'Join a public lobby and race against active online typing masters.',
+    multiplayerCreatePrivate: 'Create Custom Room',
+    multiplayerCreatePrivateDesc: 'Create a custom room and invite friends using a code.',
+    multiplayerJoinPrivate: 'Join Custom Room',
+    multiplayerEnterCode: 'Room Code:',
+    multiplayerBtnJoin: 'Join',
+    multiplayerLobbyPlayers: 'Racers in Lobby:',
+    multiplayerReady: 'Ready',
+    multiplayerUnready: 'Unready',
+    multiplayerStart: 'Start Race',
+    multiplayerChatTitle: 'Lobby Chat',
+    multiplayerChatPlaceholder: 'Type a message...',
+    multiplayerWaitingPlayers: 'Waiting for more players...',
+    multiplayerCountdown: 'Race starts in {seconds}s...',
+    multiplayerHost: 'Host',
+    multiplayerLeave: 'Leave Room',
+    multiplayerResultsLeaderboard: 'RACE RESULTS',
+    multiplayerPlayAgain: 'Rematch / Back to Lobby'
   }
 };
 
@@ -288,10 +346,24 @@ export const TyperacerGame: React.FC = () => {
   const [leaderboardRefreshTrigger, setLeaderboardRefreshTrigger] = useState<number>(0);
   const [playerName, setPlayerName] = useState<string>(() => localStorage.getItem('typeracer_player_name') || '');
 
+  // --- MULTIPLAYER STATES ---
+  const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
+  const [multiplayerPlayers, setMultiplayerPlayers] = useState<MultiplayerPlayer[]>([]);
+  const [multiplayerRoomId, setMultiplayerRoomId] = useState<string>('');
+  const [multiplayerPlayerId, setMultiplayerPlayerId] = useState<string | null>(null);
+  const [multiplayerIsHost, setMultiplayerIsHost] = useState<boolean>(false);
+  const [multiplayerStatus, setMultiplayerStatus] = useState<'lobby' | 'countdown' | 'playing' | 'finished' | null>(null);
+  const [multiplayerError, setMultiplayerError] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [currentChatMessage, setCurrentChatMessage] = useState<string>('');
+  const [lobbyCountdownSeconds, setLobbyCountdownSeconds] = useState<number | null>(null);
+  const [customRoomInput, setCustomRoomInput] = useState<string>('');
+
   // 1. Core Selection States
   const [selectedDifficulty, setSelectedDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('car');
   const [botLevel, setBotLevel] = useState<'slow' | 'medium' | 'fast'>('medium');
+  const [gameMode, setGameMode] = useState<'normal' | '5min' | '10min'>('normal');
 
   // Find the first paragraph matching current language filter
   const initialParagraph = PARAGRAPHS.find(p => p.lang === 'mn') || PARAGRAPHS[0];
@@ -301,6 +373,7 @@ export const TyperacerGame: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>('idle');
   const [countdown, setCountdown] = useState<number>(3);
   const [userInput, setUserInput] = useState<string>('');
+  const [completedCharsCount, setCompletedCharsCount] = useState<number>(0);
   
   // 3. Stats Tracking States
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -318,6 +391,273 @@ export const TyperacerGame: React.FC = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const botTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // --- MULTIPLAYER WEBSOCKET CONNECTION & EVENT HANDLERS ---
+  const connectToMultiplayer = (roomType: 'public' | 'custom', joinRoomId?: string) => {
+    setMultiplayerError(null);
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socketUrl = `${protocol}//${window.location.host}/ws`;
+    const socket = new WebSocket(socketUrl);
+    wsRef.current = socket;
+
+    socket.onopen = () => {
+      console.log('Connected to WebSocket server');
+      socket.send(JSON.stringify({
+        type: 'join',
+        name: playerName.trim() || `Racer-${Math.floor(100 + Math.random() * 900)}`,
+        vehicle: selectedVehicle,
+        roomType,
+        roomId: joinRoomId,
+        lang: gameLanguage,
+        difficulty: selectedDifficulty
+      }));
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+          case 'joined':
+            setMultiplayerPlayerId(data.playerId);
+            setMultiplayerRoomId(data.roomId);
+            setMultiplayerIsHost(data.isHost);
+            setCurrentParagraph(data.paragraph);
+            setMultiplayerPlayers(data.players);
+            setMultiplayerStatus('lobby');
+            setGameState('idle');
+            setChatMessages([]);
+            setMultiplayerError(null);
+            
+            // Auto scroll chat to bottom
+            setTimeout(() => {
+              const box = document.getElementById('chat-messages-box');
+              if (box) box.scrollTop = box.scrollHeight;
+            }, 50);
+            break;
+          
+          case 'player-joined':
+            setChatMessages(prev => {
+              const updated = [...prev, {
+                senderId: 'system',
+                senderName: 'SYSTEM',
+                message: gameLanguage === 'en' ? `${data.player.name} joined the room` : `${data.player.name} өрөөнд орж ирлээ`,
+                timestamp: Date.now()
+              }];
+              setTimeout(() => {
+                const box = document.getElementById('chat-messages-box');
+                if (box) box.scrollTop = box.scrollHeight;
+              }, 50);
+              return updated;
+            });
+            break;
+
+          case 'player-left':
+            setChatMessages(prev => {
+              const updated = [...prev, {
+                senderId: 'system',
+                senderName: 'SYSTEM',
+                message: gameLanguage === 'en' ? `${data.playerName} left the room` : `${data.playerName} өрөөнөөс гарлаа`,
+                timestamp: Date.now()
+              }];
+              setTimeout(() => {
+                const box = document.getElementById('chat-messages-box');
+                if (box) box.scrollTop = box.scrollHeight;
+              }, 50);
+              return updated;
+            });
+            break;
+
+          case 'room-players-update':
+            setMultiplayerPlayers(data.players);
+            // Re-sync host status
+            const me = data.players.find((p: any) => p.id === multiplayerPlayerId);
+            if (me) {
+              setMultiplayerIsHost(me.isHost);
+            }
+            break;
+
+          case 'room-config-updated':
+            setGameLanguage(data.lang);
+            setSelectedDifficulty(data.difficulty);
+            setCurrentParagraph(data.paragraph);
+            break;
+
+          case 'lobby-countdown-tick':
+            setLobbyCountdownSeconds(data.seconds);
+            break;
+
+          case 'lobby-countdown-cancelled':
+            setLobbyCountdownSeconds(null);
+            break;
+
+          case 'room-status-update':
+            if (data.status === 'countdown') {
+              setGameState('countdown');
+              setCountdown(5);
+            } else if (data.status === 'finished') {
+              setGameState('finished');
+              setMultiplayerPlayers(data.players);
+            }
+            break;
+
+          case 'countdown-tick':
+            setCountdown(data.countdown);
+            if (soundOn) {
+              triggerCountdownSound(data.countdown === 1);
+            }
+            break;
+
+          case 'race-start':
+            setGameState('playing');
+            setStartTime(performance.now());
+            setTimeElapsed(0);
+            setErrorsCount(0);
+            setTotalCharsTyped(0);
+            setUserInput('');
+            setCompletedCharsCount(0);
+            setHistory([]);
+            setTimeout(() => {
+              inputRef.current?.focus();
+            }, 50);
+            break;
+
+          case 'player-progress':
+            setMultiplayerPlayers(prev => prev.map(p => {
+              if (p.id === data.playerId) {
+                return { ...p, progress: data.progress, wpm: data.wpm };
+              }
+              return p;
+            }));
+            break;
+
+          case 'player-finished':
+            setMultiplayerPlayers(prev => prev.map(p => {
+              if (p.id === data.playerId) {
+                return { 
+                  ...p, 
+                  isFinished: true, 
+                  progress: 100, 
+                  wpm: data.wpm, 
+                  accuracy: data.accuracy, 
+                  finishTime: data.finishTime 
+                };
+              }
+              return p;
+            }));
+            setChatMessages(prev => {
+              const updated = [...prev, {
+                senderId: 'system',
+                senderName: 'SYSTEM',
+                message: gameLanguage === 'en' 
+                  ? `🏁 ${data.playerId === multiplayerPlayerId ? 'YOU' : 'A player'} finished! WPM: ${data.wpm}` 
+                  : `🏁 ${data.playerId === multiplayerPlayerId ? 'ТА' : 'Уралдаанч'} бариандаа орлоо! Хурд: ${data.wpm} WPM`,
+                timestamp: Date.now()
+              }];
+              setTimeout(() => {
+                const box = document.getElementById('chat-messages-box');
+                if (box) box.scrollTop = box.scrollHeight;
+              }, 50);
+              return updated;
+            });
+            break;
+
+          case 'chat-msg':
+            setChatMessages(prev => {
+              const updated = [...prev, data];
+              setTimeout(() => {
+                const box = document.getElementById('chat-messages-box');
+                if (box) box.scrollTop = box.scrollHeight;
+              }, 50);
+              return updated;
+            });
+            break;
+
+          case 'error':
+            setMultiplayerError(data.message);
+            break;
+        }
+      } catch (err) {
+        console.error('Error parsing WS message:', err);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log('WebSocket closed');
+      setMultiplayerRoomId('');
+      setMultiplayerPlayerId(null);
+      setMultiplayerPlayers([]);
+      setMultiplayerIsHost(false);
+      setLobbyCountdownSeconds(null);
+    };
+
+    socket.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      setMultiplayerError(gameLanguage === 'en' ? 'Connection error' : 'Холболтын алдаа гарлаа');
+    };
+  };
+
+  const leaveMultiplayerRoom = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setMultiplayerRoomId('');
+    setMultiplayerPlayerId(null);
+    setMultiplayerPlayers([]);
+    setMultiplayerIsHost(false);
+    setGameState('idle');
+    setLobbyCountdownSeconds(null);
+    initGame();
+  };
+
+  const sendChatMessage = () => {
+    if (!currentChatMessage.trim() || !wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'chat',
+      message: currentChatMessage.trim()
+    }));
+    setCurrentChatMessage('');
+  };
+
+  const toggleMultiplayerReady = () => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'toggle-ready'
+    }));
+  };
+
+  const startMultiplayerRace = () => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'start-race'
+    }));
+  };
+
+  // Sync configuration updates from Host to Server
+  useEffect(() => {
+    if (isMultiplayer && multiplayerIsHost && multiplayerRoomId.startsWith('ROOM-') && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'update-config',
+        lang: gameLanguage,
+        difficulty: selectedDifficulty
+      }));
+    }
+  }, [gameLanguage, selectedDifficulty]);
+
+  // Clean WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
 
   // Dictionary lookup shortcut
   const t = TRANSLATIONS[gameLanguage];
@@ -365,6 +705,7 @@ export const TyperacerGame: React.FC = () => {
     setHistory([]);
     setGameState('idle');
     setCountdown(3);
+    setCompletedCharsCount(0);
     
     // Setup Bot speed with slight variance (+- 5 WPM)
     const baseWpm = BOT_CONFIGS[botLevel].wpm;
@@ -453,11 +794,56 @@ export const TyperacerGame: React.FC = () => {
 
     setUserInput(value);
 
+    // Calculate progress and wpm locally to ensure accuracy and real-time responsiveness
+    if (isMultiplayer && wsRef.current?.readyState === WebSocket.OPEN) {
+      let localCorrectCount = 0;
+      for (let i = 0; i < value.length; i++) {
+        if (areCharsEqual(value[i], targetText[i])) {
+          localCorrectCount++;
+        } else {
+          break;
+        }
+      }
+      const progress = targetText.length > 0 ? (localCorrectCount / targetText.length) * 100 : 0;
+      const elapsed = startTime ? (performance.now() - startTime) / 1000 : 0;
+      const currentWpm = elapsed > 0 ? Math.round((localCorrectCount / 5) / (elapsed / 60)) : 0;
+
+      wsRef.current.send(JSON.stringify({
+        type: 'progress',
+        progress: Math.min(100, Math.max(0, progress)),
+        wpm: currentWpm
+      }));
+    }
+
     // WIN CONDITION: Match entire paragraph with zero errors (using the robust comparison)
     const isFinishedText = value.length === targetText.length && 
       value.split('').every((char, idx) => areCharsEqual(char, targetText[idx]));
     if (isFinishedText) {
-      finishGame();
+      if (isMultiplayer) {
+        const elapsed = startTime ? (performance.now() - startTime) / 1000 : 0;
+        const finalWpm = elapsed > 0 ? Math.round((targetText.length / 5) / (elapsed / 60)) : 0;
+        const currentTotalTyped = totalCharsTyped + lengthDiff;
+        const finalAccuracy = currentTotalTyped > 0 
+          ? Math.round(((currentTotalTyped - errorsCount) / currentTotalTyped) * 100) 
+          : 100;
+
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'finished',
+            wpm: finalWpm,
+            accuracy: finalAccuracy
+          }));
+        }
+        setGameState('finished');
+        triggerSuccessSound();
+      } else if (gameMode === '5min' || gameMode === '10min') {
+        triggerSuccessSound();
+        setCompletedCharsCount((prev) => prev + targetText.length);
+        setUserInput('');
+        selectRandomParagraph(selectedDifficulty, gameLanguage);
+      } else {
+        finishGame();
+      }
     }
   };
 
@@ -469,7 +855,13 @@ export const TyperacerGame: React.FC = () => {
     // Record final stats point
     if (startTime) {
       const duration = (performance.now() - startTime) / 1000;
-      setTimeElapsed(duration);
+      setTimeElapsed(
+        gameMode === '5min' 
+          ? Math.min(300, duration) 
+          : gameMode === '10min' 
+          ? Math.min(600, duration) 
+          : duration
+      );
     }
   };
 
@@ -490,6 +882,8 @@ export const TyperacerGame: React.FC = () => {
 
   // Listen to global keys like Escape/Enter to quickly restart/start
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isMultiplayer) return; // Prevent global reset keys in multiplayer
+    
     if (e.key === 'Escape') {
       initGame();
     } else if (e.key === 'Enter' && gameState === 'idle') {
@@ -514,7 +908,15 @@ export const TyperacerGame: React.FC = () => {
       timerRef.current = setInterval(() => {
         const now = performance.now();
         const elapsed = (now - startTime) / 1000;
-        setTimeElapsed(elapsed);
+        if (gameMode === '5min' && elapsed >= 300) {
+          setTimeElapsed(300);
+          finishGame();
+        } else if (gameMode === '10min' && elapsed >= 600) {
+          setTimeElapsed(600);
+          finishGame();
+        } else {
+          setTimeElapsed(elapsed);
+        }
       }, 100); // 100ms interval for precise real-time display updates
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -523,7 +925,7 @@ export const TyperacerGame: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState, startTime]);
+  }, [gameState, startTime, gameMode]);
 
   // Record WPM and Accuracy history point for each elapsed second
   const roundedElapsed = Math.floor(timeElapsed);
@@ -540,8 +942,10 @@ export const TyperacerGame: React.FC = () => {
       }
     }
 
+    const totalCorrect = completedCharsCount + correctCount;
+
     // Calculate active WPM
-    const currentWpm = roundedElapsed > 0 ? Math.round((correctCount / 5) / (roundedElapsed / 60)) : 0;
+    const currentWpm = roundedElapsed > 0 ? Math.round((totalCorrect / 5) / (roundedElapsed / 60)) : 0;
     
     // Calculate active accuracy
     const currentAccuracy = totalCharsTyped > 0 
@@ -553,7 +957,7 @@ export const TyperacerGame: React.FC = () => {
       if (exists) return prev;
       return [...prev, { time: roundedElapsed, wpm: currentWpm, accuracy: Math.max(0, currentAccuracy) }];
     });
-  }, [roundedElapsed, gameState, userInput, totalCharsTyped, errorsCount, currentParagraph]);
+  }, [roundedElapsed, gameState, userInput, totalCharsTyped, errorsCount, currentParagraph, completedCharsCount]);
 
   // Bot Racer simulation loop
   useEffect(() => {
@@ -570,8 +974,13 @@ export const TyperacerGame: React.FC = () => {
         const progress = (currentBotChars / currentParagraph.text.length) * 100;
 
         if (progress >= 100) {
-          setBotProgress(100);
-          clearInterval(botTimerRef.current!);
+          if (gameMode === '5min' || gameMode === '10min') {
+            currentBotChars = 0;
+            setBotProgress(0);
+          } else {
+            setBotProgress(100);
+            clearInterval(botTimerRef.current!);
+          }
         } else {
           setBotProgress(progress);
         }
@@ -583,11 +992,13 @@ export const TyperacerGame: React.FC = () => {
     return () => {
       if (botTimerRef.current) clearInterval(botTimerRef.current);
     };
-  }, [gameState, botWpm, currentParagraph]);
+  }, [gameState, botWpm, currentParagraph, gameMode]);
 
   // Handle changing difficulty/language inside selection UI
   useEffect(() => {
-    initGame();
+    if (gameState !== 'playing') {
+      initGame();
+    }
   }, [currentParagraph, botLevel]);
 
   // Triggers selection when language changes
@@ -599,9 +1010,22 @@ export const TyperacerGame: React.FC = () => {
   const firstErrorIndex = userInput.split('').findIndex((char, idx) => !areCharsEqual(char, currentParagraph.text[idx]));
   const hasError = firstErrorIndex !== -1;
   const correctCount = firstErrorIndex === -1 ? userInput.length : firstErrorIndex;
+  const totalCorrectChars = completedCharsCount + correctCount;
+
+  const timeLeft = gameMode === '5min' 
+    ? Math.max(0, 300 - Math.floor(timeElapsed)) 
+    : gameMode === '10min' 
+    ? Math.max(0, 600 - Math.floor(timeElapsed)) 
+    : 300;
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
   
   // Calculate Live Metrics
-  const liveWpm = timeElapsed > 0 ? Math.round((correctCount / 5) / (timeElapsed / 60)) : 0;
+  const liveWpm = timeElapsed > 0 ? Math.round((totalCorrectChars / 5) / (timeElapsed / 60)) : 0;
   const liveAccuracy = totalCharsTyped > 0 
     ? Math.round(((totalCharsTyped - errorsCount) / totalCharsTyped) * 100) 
     : 100;
@@ -650,8 +1074,519 @@ export const TyperacerGame: React.FC = () => {
     );
   };
 
+  const getVehicleTypeConfig = (type: VehicleType) => {
+    const configs = {
+      car: { emoji: '🏎️' },
+      rocket: { emoji: '🚀' },
+      horse: { emoji: '🐎' }
+    };
+    return configs[type] || configs.car;
+  };
+
+  const renderMultiplayerChat = () => {
+    return (
+      <div className="flex flex-col gap-4 p-5 rounded-3xl bg-slate-900/30 border border-slate-800 h-[480px] md:h-auto">
+        <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400 pb-3 border-b border-slate-800/50">
+          💬 {t.multiplayerChatTitle}
+        </h3>
+        
+        {/* Messages Body */}
+        <div 
+          id="chat-messages-box" 
+          className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2.5 max-h-[340px] md:max-h-none min-h-[220px]"
+        >
+          {chatMessages.length === 0 ? (
+            <div className="my-auto text-center text-[10px] font-mono text-slate-600 uppercase tracking-widest leading-loose">
+              No messages yet.<br />Send a friendly greeting!
+            </div>
+          ) : (
+            chatMessages.map((msg, index) => {
+              const isSystem = msg.senderId === 'system';
+              if (isSystem) {
+                return (
+                  <div key={index} className="text-center py-1 text-[9px] font-mono text-slate-500 uppercase tracking-widest leading-normal">
+                    {msg.message}
+                  </div>
+                );
+              }
+              const isMe = msg.senderId === multiplayerPlayerId;
+              return (
+                <div key={index} className={`flex flex-col max-w-[85%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
+                  <span className="text-[9px] font-mono text-slate-500 font-bold mb-0.5 truncate max-w-[120px]">
+                    {msg.senderName}
+                  </span>
+                  <div className={`px-3 py-2 rounded-xl text-xs font-sans break-words leading-relaxed ${
+                    isMe 
+                      ? `${theme.bg} text-slate-950 font-medium rounded-tr-none shadow-sm` 
+                      : 'bg-slate-950 border border-slate-800 text-slate-200 rounded-tl-none shadow-inner'
+                  }`}>
+                    {msg.message}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Chat input form */}
+        <div className="flex gap-2 border-t border-slate-800/40 pt-3 relative">
+          <input
+            type="text"
+            value={currentChatMessage}
+            onChange={(e) => setCurrentChatMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                sendChatMessage();
+              }
+            }}
+            placeholder={t.multiplayerChatPlaceholder}
+            className="flex-1 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-4 py-2.5 text-xs font-sans focus:outline-none focus:border-slate-600 placeholder:text-slate-700 transition-all"
+          />
+          <button
+            onClick={sendChatMessage}
+            className={`px-4 rounded-xl text-xs font-sans font-black uppercase tracking-wider transition-all cursor-pointer ${
+              currentChatMessage.trim() 
+                ? `${theme.bg} text-slate-950` 
+                : 'bg-slate-800 text-slate-600'
+            }`}
+          >
+            {gameLanguage === 'en' ? 'SEND' : 'ИЛГЭЭХ'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMultiplayerJoinSelector = () => {
+    return (
+      <div className="flex flex-col gap-6 p-6 md:p-8 rounded-3xl bg-slate-900/30 border border-slate-800" id="mp-lobby-selector">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-xl font-sans font-black tracking-tight text-white uppercase">{t.multiplayerLobbyTitle}</h2>
+          <p className="text-xs text-slate-500 font-mono uppercase tracking-wider">{t.multiplayerLobbySubtitle}</p>
+        </div>
+
+        {multiplayerError && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono uppercase tracking-wider">
+            ⚠️ {multiplayerError}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+          {/* Card 1: Nickname & Vehicle */}
+          <div className="flex flex-col gap-4 p-5 bg-slate-950/40 rounded-2xl border border-slate-800 flex-1">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">👤 {t.multiplayerEnterNickname}</h3>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => {
+                const val = e.target.value;
+                setPlayerName(val);
+                localStorage.setItem('typeracer_player_name', val);
+              }}
+              placeholder={t.enterNamePlaceholder}
+              maxLength={25}
+              className={`w-full bg-slate-900 border text-slate-100 rounded-xl px-4 py-2.5 text-xs font-sans focus:outline-none focus:border-${themeColor}-500/50 focus:ring-1 focus:ring-${themeColor}-500/30 placeholder:text-slate-600 transition-all shadow-inner`}
+            />
+
+            <div className="flex flex-col gap-1.5 mt-2">
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.vehicle}</span>
+              <div className="grid grid-cols-3 gap-2 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+                {(['car', 'rocket', 'horse'] as const).map((v) => {
+                  const isSelected = selectedVehicle === v;
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => setSelectedVehicle(v)}
+                      className={`flex flex-col items-center justify-center gap-1 py-1.5 px-2 text-xs font-sans font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                        isSelected
+                          ? `${theme.glow} border border-${themeColor}-500/20 ${theme.text}`
+                          : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      <span className="text-xl">{v === 'car' ? '🏎️' : v === 'rocket' ? '🚀' : '🐎'}</span>
+                      <span className="text-[8px] mt-0.5">{v === 'car' ? t.car : v === 'rocket' ? t.rocket : t.horse}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Quick Match */}
+          <div className="flex flex-col justify-between p-5 bg-slate-950/40 rounded-2xl border border-slate-800 flex-1">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">⚡ {t.multiplayerQuickMatch}</h3>
+              <p className="text-[11px] text-slate-500 font-sans leading-relaxed">{t.multiplayerQuickMatchDesc}</p>
+            </div>
+            <button
+              onClick={() => connectToMultiplayer('public')}
+              className={`w-full py-3.5 px-6 rounded-xl ${theme.bg} ${theme.hoverBg} text-slate-950 font-sans font-black uppercase tracking-widest text-xs shadow-lg ${theme.shadow} transition-all mt-4 hover:scale-102 active:scale-98`}
+            >
+              🚀 {t.startRaceBtn}
+            </button>
+          </div>
+
+          {/* Card 3: Private Custom Room */}
+          <div className="flex flex-col gap-4 p-5 bg-slate-950/40 rounded-2xl border border-slate-800 flex-1 justify-between">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">🔒 {t.multiplayerJoinPrivate}</h3>
+              <p className="text-[11px] text-slate-500 font-sans leading-relaxed">{t.multiplayerCreatePrivateDesc}</p>
+            </div>
+
+            <div className="flex flex-col gap-2 mt-2">
+              <button
+                onClick={() => connectToMultiplayer('custom')}
+                className="w-full py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700/80 active:bg-slate-800 border border-slate-700 text-xs font-sans font-bold uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+              >
+                ➕ {t.multiplayerCreatePrivate}
+              </button>
+
+              <div className="relative mt-2">
+                <input
+                  type="text"
+                  value={customRoomInput}
+                  onChange={(e) => setCustomRoomInput(e.target.value.toUpperCase())}
+                  placeholder="ROOM-XXXXX"
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl pl-4 pr-20 py-2.5 text-xs font-mono focus:outline-none focus:border-slate-600 placeholder:text-slate-600 transition-all"
+                />
+                <button
+                  disabled={!customRoomInput.trim()}
+                  onClick={() => connectToMultiplayer('custom', customRoomInput.trim().toUpperCase())}
+                  className={`absolute right-1 top-1 bottom-1 px-4 rounded-lg text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
+                    customRoomInput.trim()
+                      ? `${theme.bg} text-slate-950 hover:opacity-90 cursor-pointer`
+                      : 'bg-slate-800 text-slate-600 disabled:opacity-40'
+                  }`}
+                >
+                  {t.multiplayerBtnJoin}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMultiplayerLobby = () => {
+    const isCustomRoom = multiplayerRoomId.startsWith('ROOM-');
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="mp-active-lobby">
+        {/* Left Side: Room details & Racers */}
+        <div className="md:col-span-2 flex flex-col gap-6 p-6 md:p-8 rounded-3xl bg-slate-900/30 border border-slate-800 justify-between">
+          <div>
+            <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
+              <div className="flex flex-col gap-1">
+                <span className={`text-[10px] font-mono font-bold ${theme.text} uppercase tracking-widest`}>
+                  {isCustomRoom ? '🔒 CUSTOM PRIVATE LOBBY' : '⚡ PUBLIC MATCHMAKING'}
+                </span>
+                <h2 className="text-xl font-mono font-black text-white">{multiplayerRoomId}</h2>
+              </div>
+              
+              {/* Copy button for Custom Room Code */}
+              {isCustomRoom && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(multiplayerRoomId);
+                    alert(gameLanguage === 'en' ? 'Room Code Copied!' : 'Өрөөний код хуулагдлаа!');
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-[10px] font-sans font-bold uppercase tracking-wider text-slate-300 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  📋 {gameLanguage === 'en' ? 'COPY' : 'ХУУЛАХ'}
+                </button>
+              )}
+            </div>
+
+            {/* Configuration Summary or Controls */}
+            <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex flex-col gap-4 mt-5">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">⚙️ {gameLanguage === 'en' ? 'RACE CONFIGURATION' : 'ТОХИРГОО'}</h3>
+              
+              {isCustomRoom && multiplayerIsHost ? (
+                /* Host controls */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.settingsLang}</span>
+                    <div className="grid grid-cols-2 gap-2 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+                      <button
+                        onClick={() => setGameLanguage('mn')}
+                        className={`py-2 text-[10px] font-sans font-bold uppercase tracking-wider rounded-lg transition-all ${
+                          gameLanguage === 'mn' ? `${theme.bg} text-slate-950` : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        Монгол
+                      </button>
+                      <button
+                        onClick={() => setGameLanguage('en')}
+                        className={`py-2 text-[10px] font-sans font-bold uppercase tracking-wider rounded-lg transition-all ${
+                          gameLanguage === 'en' ? `${theme.bg} text-slate-950` : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        English
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.difficulty}</span>
+                    <div className="grid grid-cols-4 gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+                      {(['all', 'easy', 'medium', 'hard'] as const).map((diff) => (
+                        <button
+                          key={diff}
+                          onClick={() => setSelectedDifficulty(diff)}
+                          className={`py-2 text-[9px] font-sans font-bold uppercase tracking-wider rounded-lg transition-all ${
+                            selectedDifficulty === diff ? `${theme.bg} text-slate-950` : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          {diff === 'all' ? t.all : diff === 'easy' ? t.easy : diff === 'medium' ? t.medium : t.hard}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Non-host overview */
+                <div className="flex items-center gap-6">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-slate-500 tracking-wider">LANGUAGE:</span>
+                    <span className="text-xs font-sans font-bold text-slate-300 uppercase">{gameLanguage === 'mn' ? 'Монгол (MN)' : 'English (EN)'}</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-slate-500 tracking-wider">DIFFICULTY:</span>
+                    <span className={`text-xs font-sans font-bold uppercase ${theme.text}`}>{selectedDifficulty}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-600 italic font-mono uppercase ml-auto">
+                    {isCustomRoom ? '• HOST IS MANAGING SETTINGS' : '• STANDARD POOL RULES'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Connected Racers list */}
+            <div className="flex flex-col gap-3 mt-5">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">{t.multiplayerLobbyPlayers}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {multiplayerPlayers.map((player) => {
+                  const isCurrent = player.id === multiplayerPlayerId;
+                  const vehicleCfg = getVehicleTypeConfig(player.vehicle);
+                  return (
+                    <div
+                      key={player.id}
+                      className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${
+                        isCurrent
+                          ? 'bg-slate-950/60 border-emerald-500/20'
+                          : 'bg-slate-950/25 border-slate-800'
+                      }`}
+                    >
+                      <span className="text-2xl filter drop-shadow-md">{vehicleCfg.emoji}</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-sans font-bold text-slate-200">
+                          {player.name} {isCurrent && <span className="text-[10px] text-slate-500">(ТА)</span>}
+                        </span>
+                        <span className="text-[9px] font-mono uppercase text-slate-500">
+                          {player.isHost ? '👑 HOST' : 'RACER'}
+                        </span>
+                      </div>
+                      
+                      {/* Ready state icon */}
+                      <div className="ml-auto">
+                        {isCustomRoom ? (
+                          player.ready ? (
+                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] font-bold uppercase tracking-widest">
+                              {t.multiplayerReady}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-slate-800 text-slate-500 border border-transparent rounded text-[9px] font-bold uppercase tracking-widest">
+                              {t.multiplayerUnready}
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-emerald-500 text-xs">●</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Play/Ready Actions */}
+          <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-slate-800/40 items-center justify-between mt-5">
+            <button
+              onClick={leaveMultiplayerRoom}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-800 hover:border-red-500/30 hover:text-red-400 text-xs font-sans font-bold uppercase tracking-wider text-slate-500 transition-all cursor-pointer"
+            >
+              ⬅️ {t.multiplayerLeave}
+            </button>
+
+            {/* Countdown / Matchmaking alert */}
+            {lobbyCountdownSeconds !== null ? (
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-400 uppercase tracking-widest animate-pulse">
+                ⏳ {t.multiplayerCountdown.replace('{seconds}', lobbyCountdownSeconds.toString())}
+              </div>
+            ) : !isCustomRoom ? (
+              <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider animate-pulse flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                {t.multiplayerWaitingPlayers}
+              </div>
+            ) : null}
+
+            {isCustomRoom ? (
+              multiplayerIsHost ? (
+                <button
+                  onClick={startMultiplayerRace}
+                  className={`w-full sm:w-auto px-10 py-3 rounded-xl ${theme.bg} ${theme.hoverBg} text-slate-950 font-sans font-black uppercase tracking-widest text-xs shadow-lg ${theme.shadow} transition-all cursor-pointer hover:scale-102 active:scale-98`}
+                >
+                  🟢 {t.multiplayerStart}
+                </button>
+              ) : (
+                <button
+                  onClick={toggleMultiplayerReady}
+                  className={`w-full sm:w-auto px-10 py-3 rounded-xl font-sans font-black uppercase tracking-widest text-xs shadow-lg transition-all cursor-pointer hover:scale-102 active:scale-98 ${
+                    multiplayerPlayers.find(p => p.id === multiplayerPlayerId)?.ready
+                      ? 'bg-slate-800 border border-slate-700 text-slate-300'
+                      : `${theme.bg} text-slate-950 ${theme.shadow}`
+                  }`}
+                >
+                  {multiplayerPlayers.find(p => p.id === multiplayerPlayerId)?.ready ? `❌ ${t.multiplayerUnready}` : `✓ ${t.multiplayerReady}`}
+                </button>
+              )
+            ) : (
+              /* Public room auto-ready */
+              <button
+                onClick={startMultiplayerRace}
+                className={`w-full sm:w-auto px-10 py-3 rounded-xl ${theme.bg} ${theme.hoverBg} text-slate-950 font-sans font-black uppercase tracking-widest text-xs shadow-lg ${theme.shadow} transition-all cursor-pointer hover:scale-102 active:scale-98`}
+              >
+                🏁 {t.startRaceBtn}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right Side: Chat Panel */}
+        {renderMultiplayerChat()}
+      </div>
+    );
+  };
+
+  const renderMultiplayerResults = () => {
+    // Sort players by finish time or progress
+    const sorted = [...multiplayerPlayers].sort((a, b) => {
+      if (a.isFinished && b.isFinished) {
+        return (a.finishTime || 0) - (b.finishTime || 0);
+      }
+      if (a.isFinished) return -1;
+      if (b.isFinished) return 1;
+      return b.progress - a.progress;
+    });
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="mp-results-board">
+        <div className="md:col-span-2 flex flex-col gap-6 p-6 md:p-8 rounded-3xl bg-slate-900/30 border border-slate-800">
+          <div className="flex flex-col gap-1.5 pb-4 border-b border-slate-800/80">
+            <span className={`text-[10px] font-mono font-bold ${theme.text} uppercase tracking-widest`}>🏁 RACE RESULTS</span>
+            <h2 className="text-xl font-sans font-black text-white uppercase">{t.multiplayerResultsLeaderboard}</h2>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {sorted.map((player, index) => {
+              const isCurrent = player.id === multiplayerPlayerId;
+              const vehicleCfg = getVehicleTypeConfig(player.vehicle);
+              
+              return (
+                <div 
+                  key={player.id}
+                  className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl border transition-all gap-4 ${
+                    isCurrent 
+                      ? 'bg-emerald-500/5 border-emerald-500/20 shadow-md' 
+                      : 'bg-slate-950/25 border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-mono font-black text-slate-500 w-6 text-center">
+                      #{index + 1}
+                    </span>
+                    <span className="text-2xl filter drop-shadow-md">{vehicleCfg.emoji}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-sans font-bold text-slate-200">
+                        {player.name} {isCurrent && <span className="text-[10px] text-slate-500">(ТА)</span>}
+                      </span>
+                      <span className="text-[9px] font-mono text-slate-500 uppercase">
+                        {player.isHost ? '👑 HOST' : 'RACER'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 self-end sm:self-auto">
+                    <div className="text-right">
+                      <span className="text-[8px] font-mono text-slate-500 block uppercase">SPEED</span>
+                      <span className={`text-sm font-mono font-black ${theme.text}`}>{player.wpm} WPM</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] font-mono text-slate-500 block uppercase">ACCURACY</span>
+                      <span className="text-sm font-mono font-black text-slate-300">{player.accuracy || 100}%</span>
+                    </div>
+                    <div className="text-right min-w-[70px]">
+                      <span className="text-[8px] font-mono text-slate-500 block uppercase">DURATION</span>
+                      <span className="text-sm font-mono font-black text-slate-400">
+                        {player.isFinished ? `${player.finishTime?.toFixed(1)}s` : 'RACING...'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-4 border-t border-slate-800/40 flex justify-end">
+            <button
+              onClick={leaveMultiplayerRoom}
+              className={`w-full sm:w-auto px-10 py-3.5 rounded-xl ${theme.bg} ${theme.hoverBg} text-slate-950 font-sans font-black uppercase tracking-widest text-xs shadow-lg ${theme.shadow} transition-all cursor-pointer w-full sm:w-auto`}
+            >
+              🔄 {t.multiplayerPlayAgain}
+            </button>
+          </div>
+        </div>
+
+        {/* Chat box */}
+        {renderMultiplayerChat()}
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 px-4 py-4" id="typeracer-core">
+      {/* Game Mode Tab Selector (Single Player vs Multiplayer) */}
+      <div className="flex bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800/80 w-full md:w-fit self-center md:self-start shadow-lg">
+        <button
+          onClick={() => {
+            setIsMultiplayer(false);
+            leaveMultiplayerRoom();
+          }}
+          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+            !isMultiplayer
+              ? `${theme.bg} text-slate-950 shadow-md ${theme.shadow}`
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {t.multiplayerTabSingle}
+        </button>
+        <button
+          onClick={() => {
+            setIsMultiplayer(true);
+            setGameState('idle');
+          }}
+          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+            isMultiplayer
+              ? `${theme.bg} text-slate-950 shadow-md ${theme.shadow}`
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {t.multiplayerTabMulti}
+        </button>
+      </div>
+
       {/* 1. Header Area with Sleek Style branding and Stats Counters */}
       <header className="p-6 md:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border border-slate-800 rounded-2xl bg-slate-900/40 backdrop-blur-md gap-6 relative">
         <div className="flex items-center gap-4">
@@ -680,6 +1615,14 @@ export const TyperacerGame: React.FC = () => {
             <p className="text-[9px] uppercase tracking-widest text-slate-500 font-bold mb-0.5">{t.errors}</p>
             <p className="text-2xl md:text-3xl font-black font-mono text-red-500">{errorsCount}</p>
           </div>
+          <div className="text-right">
+            <p className="text-[9px] uppercase tracking-widest text-slate-500 font-bold mb-0.5">
+              {(gameMode === '5min' || gameMode === '10min') ? t.timeLeft : (gameLanguage === 'en' ? 'TIME' : 'ХУГАЦАА')}
+            </p>
+            <p className={`text-2xl md:text-3xl font-black font-mono ${(gameMode === '5min' || gameMode === '10min') && timeLeft < 30 ? 'text-rose-500 animate-pulse' : 'text-slate-300'}`}>
+              {(gameMode === '5min' || gameMode === '10min') ? formatTime(timeLeft) : `${timeElapsed.toFixed(1)}s`}
+            </p>
+          </div>
 
           {/* Settings Trigger Icon */}
           <button
@@ -692,252 +1635,397 @@ export const TyperacerGame: React.FC = () => {
         </div>
       </header>
 
-      {/* 2. Setup Configuration Area (Compact and Sleek) */}
-      <div className="flex flex-col gap-4 bg-slate-900/30 p-5 rounded-2xl border border-slate-800/60">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.difficulty}</span>
-            <div className="flex bg-slate-950/40 p-1 rounded-xl border border-slate-800">
-              {(['all', 'easy', 'medium', 'hard'] as const).map((diff) => (
-                <button
-                  key={diff}
-                  onClick={() => handleParagraphChange(diff)}
-                  className={`px-3 py-1.5 text-[11px] font-sans font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer ${
-                    selectedDifficulty === diff
-                      ? `${theme.bg} text-slate-950 shadow-md ${theme.shadow}`
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {diff === 'all' ? t.all : diff === 'easy' ? t.easy : diff === 'medium' ? t.medium : t.hard}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={() => selectRandomParagraph(selectedDifficulty, gameLanguage)}
-            disabled={gameState === 'countdown' || gameState === 'playing'}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 active:bg-slate-800 border border-slate-700 text-xs font-sans font-bold uppercase tracking-wider text-slate-300 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer ml-auto sm:ml-0"
-          >
-            <Sparkles size={13} className={theme.text} />
-            <span>{t.changeText}</span>
-          </button>
-        </div>
-
-        {/* Configuration selectors */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-800/40 pt-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.vehicle}</span>
-            <div className="grid grid-cols-3 gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800">
-              {(['car', 'rocket', 'horse'] as const).map((v) => {
-                const isSelected = selectedVehicle === v;
-                return (
-                  <button
-                    key={v}
-                    onClick={() => setSelectedVehicle(v)}
-                    disabled={gameState === 'countdown' || gameState === 'playing'}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-sans font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                      isSelected
-                        ? `${theme.glow} border border-${themeColor}-500/20 ${theme.text}`
-                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                    } disabled:opacity-50`}
-                  >
-                    <span>{v === 'car' ? '🏎️' : v === 'rocket' ? '🚀' : '🐎'}</span>
-                    <span className="text-[10px]">{v === 'car' ? t.car : v === 'rocket' ? t.rocket : t.horse}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.botLevel}</span>
-            <div className="grid grid-cols-3 gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800">
-              {(['slow', 'medium', 'fast'] as const).map((level) => {
-                const isSelected = botLevel === level;
-                return (
-                  <button
-                    key={level}
-                    onClick={() => setBotLevel(level)}
-                    disabled={gameState === 'countdown' || gameState === 'playing'}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-sans font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                      isSelected
-                        ? `bg-slate-800 border border-slate-700 ${theme.text}`
-                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                    } disabled:opacity-50`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      level === 'slow' ? 'bg-emerald-400' : level === 'medium' ? 'bg-amber-400' : 'bg-rose-400'
-                    }`} />
-                    <span className="text-[10px]">
-                      {level === 'slow' ? t.easy : level === 'medium' ? t.medium : t.hard}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Race Track Section */}
-      <Track
-        playerProgress={playerProgress}
-        botProgress={botProgress}
-        playerVehicle={selectedVehicle}
-        playerWpm={liveWpm}
-        botWpm={botWpm}
-        botName={BOT_CONFIGS[botLevel].name}
-        gameState={gameState}
-        lang={gameLanguage}
-      />
-
-      {/* 4. Typing Box Area */}
-      <div className="flex flex-col gap-6 p-6 md:p-8 rounded-3xl bg-slate-900/20 border border-slate-800 shadow-2xl relative overflow-hidden" id="playground">
-        
-        {/* Paragraph Text Viewport */}
-        <div className="relative p-6 md:p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80">
-          <span className="absolute -top-2.5 left-4 px-3 py-0.5 text-[9px] font-mono tracking-widest text-slate-500 uppercase bg-slate-950 border border-slate-800 rounded">
-            {t.textSource} {currentParagraph.source}
-          </span>
-          {renderParagraphText()}
-        </div>
-
-        {/* Input Block / Countdown Layer */}
-        <div className="flex flex-col gap-3 relative">
-          {gameState === 'idle' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 rounded-2xl border border-slate-800/80 z-30 backdrop-blur-sm transition-all p-6 text-center gap-4">
-              <div className="max-w-xs w-full flex flex-col gap-2 animate-fadeIn">
-                <span className={`text-[10px] font-mono font-black ${theme.text} uppercase tracking-widest flex items-center justify-center gap-1.5`}>
-                  <Keyboard size={12} />
-                  {t.enterNameTitle}
-                </span>
-                <input
-                  type="text"
-                  value={playerName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setPlayerName(val);
-                    localStorage.setItem('typeracer_player_name', val);
-                  }}
-                  placeholder={t.enterNamePlaceholder}
-                  maxLength={25}
-                  className={`w-full bg-slate-900/80 border text-slate-100 rounded-xl px-4 py-2.5 text-xs text-center font-sans focus:outline-none focus:border-${themeColor}-500/50 focus:ring-1 focus:ring-${themeColor}-500/30 placeholder:text-slate-600 transition-all shadow-inner`}
-                />
-                {!playerName.trim() && (
-                  <p className="text-[9px] text-amber-500/80 font-mono uppercase tracking-wider animate-pulse">
-                    ⚠️ {t.enterNameError}
-                  </p>
-                )}
+      {!isMultiplayer ? (
+        <>
+          {/* 2. Setup Configuration Area (Compact and Sleek) */}
+          <div className="flex flex-col gap-4 bg-slate-900/30 p-5 rounded-2xl border border-slate-800/60">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.difficulty}</span>
+                <div className="flex bg-slate-950/40 p-1 rounded-xl border border-slate-800">
+                  {(['all', 'easy', 'medium', 'hard'] as const).map((diff) => (
+                    <button
+                      key={diff}
+                      onClick={() => handleParagraphChange(diff)}
+                      className={`px-3 py-1.5 text-[11px] font-sans font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer ${
+                        selectedDifficulty === diff
+                          ? `${theme.bg} text-slate-950 shadow-md ${theme.shadow}`
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {diff === 'all' ? t.all : diff === 'easy' ? t.easy : diff === 'medium' ? t.medium : t.hard}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button
-                onClick={() => {
-                  if (playerName.trim()) {
-                    startCountdown();
-                  }
-                }}
-                disabled={!playerName.trim()}
-                className={`px-8 py-3.5 rounded-xl ${theme.bg} ${theme.hoverBg} text-slate-950 font-sans font-black uppercase tracking-widest text-xs shadow-lg ${theme.shadow} transition-all flex items-center gap-2 cursor-pointer hover:scale-102 active:scale-98 disabled:opacity-30 disabled:pointer-events-none disabled:scale-100`}
-                id="start-race-btn"
+                onClick={() => selectRandomParagraph(selectedDifficulty, gameLanguage)}
+                disabled={gameState === 'countdown' || gameState === 'playing'}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 active:bg-slate-800 border border-slate-700 text-xs font-sans font-bold uppercase tracking-wider text-slate-300 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer ml-auto sm:ml-0"
               >
-                <Trophy size={14} />
-                <span>{t.startRaceBtn}</span>
+                <Sparkles size={13} className={theme.text} />
+                <span>{t.changeText}</span>
               </button>
-              
-              <p className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">
-                {t.pressEnterTip}
-              </p>
             </div>
-          )}
 
-          {gameState === 'countdown' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 rounded-2xl border border-slate-800 z-30 backdrop-blur-xs animate-pulse">
-              <span className={`text-[10px] font-mono font-black ${theme.text} uppercase tracking-widest`}>{t.countdownReady}</span>
-              <span className="text-5xl font-mono font-black text-white mt-1.5">{countdown}</span>
-            </div>
-          )}
-
-          {/* Typing console input box */}
-          <div className="relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={userInput}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              disabled={gameState !== 'playing'}
-              placeholder={gameState === 'playing' ? t.inputPlaceholderPlaying : t.inputPlaceholderIdle}
-              className={`w-full bg-slate-950 border-2 rounded-2xl py-5 px-6 text-xl md:text-2xl font-mono focus:outline-none transition-all pr-44 shadow-lg ${
-                hasError
-                  ? 'border-red-500/50 text-red-300 focus:border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
-                  : `border-${themeColor}-500/20 text-${themeColor === 'crimson' ? 'rose' : themeColor}-400 focus:border-${themeColor === 'crimson' ? 'rose' : themeColor}-500/50 focus:shadow-[0_0_25px_rgba(${themeColor === 'emerald' ? '16,185,129' : themeColor === 'cyan' ? '6,182,212' : themeColor === 'amber' ? '245,158,11' : '244,63,94'},0.15)]`
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              id="typeracer-input-field"
-            />
-            {/* Keycap / Escape indicator on the right side of the input bar */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
-              {hasError ? (
-                <div className="text-red-500 flex items-center gap-1 cursor-help animate-bounce" title={t.errorsLabel}>
-                  <ShieldAlert size={18} />
+            {/* Configuration selectors */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-800/40 pt-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.vehicle}</span>
+                <div className="grid grid-cols-3 gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800">
+                  {(['car', 'rocket', 'horse'] as const).map((v) => {
+                    const isSelected = selectedVehicle === v;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => setSelectedVehicle(v)}
+                        disabled={gameState === 'countdown' || gameState === 'playing'}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-sans font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          isSelected
+                            ? `${theme.glow} border border-${themeColor}-500/20 ${theme.text}`
+                            : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                        } disabled:opacity-50`}
+                      >
+                        <span>{v === 'car' ? '🏎️' : v === 'rocket' ? '🚀' : '🐎'}</span>
+                        <span className="text-[10px]">{v === 'car' ? t.car : v === 'rocket' ? t.rocket : t.horse}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : null}
-              <kbd className="hidden md:inline-block px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded text-[9px] text-slate-500 font-mono shadow-sm">
-                ESC
-              </kbd>
-              <span className="hidden md:inline text-[9px] text-slate-600 uppercase tracking-widest font-bold">
-                {t.restartBtn}
-              </span>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.botLevel}</span>
+                <div className="grid grid-cols-3 gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800">
+                  {(['slow', 'medium', 'fast'] as const).map((level) => {
+                    const isSelected = botLevel === level;
+                    return (
+                      <button
+                        key={level}
+                        onClick={() => setBotLevel(level)}
+                        disabled={gameState === 'countdown' || gameState === 'playing'}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-sans font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          isSelected
+                            ? `bg-slate-800 border border-slate-700 ${theme.text}`
+                            : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                        } disabled:opacity-50`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          level === 'slow' ? 'bg-emerald-400' : level === 'medium' ? 'bg-amber-400' : 'bg-rose-400'
+                        }`} />
+                        <span className="text-[10px]">
+                          {level === 'slow' ? t.easy : level === 'medium' ? t.medium : t.hard}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest pl-1">{t.gameMode}</span>
+                <div className="grid grid-cols-3 gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800">
+                  {(['normal', '5min', '10min'] as const).map((mode) => {
+                    const isSelected = gameMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => {
+                          setGameMode(mode);
+                          initGame();
+                        }}
+                        disabled={gameState === 'countdown' || gameState === 'playing'}
+                        className={`flex items-center justify-center gap-1 px-1 py-2 text-[10px] font-sans font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          isSelected
+                            ? `bg-slate-800 border border-slate-700 ${theme.text}`
+                            : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                        } disabled:opacity-50`}
+                      >
+                        <span>{mode === 'normal' ? '🏁' : '⏱️'}</span>
+                        <span>{mode === 'normal' ? t.normalMode : mode === '5min' ? t.fiveMinMode : t.tenMinMode}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Bottom guidelines panel */}
-          <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono uppercase tracking-widest px-1">
-            <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${hasError ? 'bg-red-500 animate-pulse' : theme.trackColor}`}></span>
-              <span>
-                {hasError 
-                  ? t.errorsLabel 
-                  : t.calculatingMetrics}
+          {/* 3. Race Track Section */}
+          <Track
+            playerProgress={playerProgress}
+            botProgress={botProgress}
+            playerVehicle={selectedVehicle}
+            playerWpm={liveWpm}
+            botWpm={botWpm}
+            botName={BOT_CONFIGS[botLevel].name}
+            gameState={gameState}
+            lang={gameLanguage}
+            isMultiplayer={isMultiplayer}
+            multiplayerPlayers={multiplayerPlayers}
+            currentPlayerId={multiplayerPlayerId}
+          />
+
+          {/* 4. Typing Box Area */}
+          <div className="flex flex-col gap-6 p-6 md:p-8 rounded-3xl bg-slate-900/20 border border-slate-800 shadow-2xl relative overflow-hidden" id="playground">
+            
+            {/* Paragraph Text Viewport */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80">
+              <span className="absolute -top-2.5 left-4 px-3 py-0.5 text-[9px] font-mono tracking-widest text-slate-500 uppercase bg-slate-950 border border-slate-800 rounded">
+                {t.textSource} {currentParagraph.source}
               </span>
+              {renderParagraphText()}
             </div>
-            {gameState === 'playing' && (
-              <span className="text-slate-400 font-bold">
-                {userInput.length} / {currentParagraph.text.length} {t.charactersCount}
-              </span>
-            )}
+
+            {/* Input Block / Countdown Layer */}
+            <div className="flex flex-col gap-3 relative">
+              {gameState === 'idle' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 rounded-2xl border border-slate-800/80 z-30 backdrop-blur-sm transition-all p-6 text-center gap-4">
+                  <div className="max-w-xs w-full flex flex-col gap-2 animate-fadeIn">
+                    <span className={`text-[10px] font-mono font-black ${theme.text} uppercase tracking-widest flex items-center justify-center gap-1.5`}>
+                      <Keyboard size={12} />
+                      {t.enterNameTitle}
+                    </span>
+                    <input
+                      type="text"
+                      value={playerName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPlayerName(val);
+                        localStorage.setItem('typeracer_player_name', val);
+                      }}
+                      placeholder={t.enterNamePlaceholder}
+                      maxLength={25}
+                      className={`w-full bg-slate-900/80 border text-slate-100 rounded-xl px-4 py-2.5 text-xs text-center font-sans focus:outline-none focus:border-${themeColor}-500/50 focus:ring-1 focus:ring-${themeColor}-500/30 placeholder:text-slate-600 transition-all shadow-inner`}
+                    />
+                    {!playerName.trim() && (
+                      <p className="text-[9px] text-amber-500/80 font-mono uppercase tracking-wider animate-pulse">
+                        ⚠️ {t.enterNameError}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (playerName.trim()) {
+                        startCountdown();
+                      }
+                    }}
+                    disabled={!playerName.trim()}
+                    className={`px-8 py-3.5 rounded-xl ${theme.bg} ${theme.hoverBg} text-slate-950 font-sans font-black uppercase tracking-widest text-xs shadow-lg ${theme.shadow} transition-all flex items-center gap-2 cursor-pointer hover:scale-102 active:scale-98 disabled:opacity-30 disabled:pointer-events-none disabled:scale-100`}
+                    id="start-race-btn"
+                  >
+                    <Trophy size={14} />
+                    <span>{t.startRaceBtn}</span>
+                  </button>
+                  
+                  <p className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">
+                    {t.pressEnterTip}
+                  </p>
+                </div>
+              )}
+
+              {gameState === 'countdown' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 rounded-2xl border border-slate-800 z-30 backdrop-blur-xs animate-pulse">
+                  <span className={`text-[10px] font-mono font-black ${theme.text} uppercase tracking-widest`}>{t.countdownReady}</span>
+                  <span className="text-5xl font-mono font-black text-white mt-1.5">{countdown}</span>
+                </div>
+              )}
+
+              {/* Typing console input box */}
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={userInput}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  disabled={gameState !== 'playing'}
+                  placeholder={gameState === 'playing' ? t.inputPlaceholderPlaying : t.inputPlaceholderIdle}
+                  className={`w-full bg-slate-950 border-2 rounded-2xl py-5 px-6 text-xl md:text-2xl font-mono focus:outline-none transition-all pr-44 shadow-lg ${
+                    hasError
+                      ? 'border-red-500/50 text-red-300 focus:border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                      : `border-${themeColor}-500/20 text-${themeColor === 'crimson' ? 'rose' : themeColor}-400 focus:border-${themeColor === 'crimson' ? 'rose' : themeColor}-500/50 focus:shadow-[0_0_25px_rgba(${themeColor === 'emerald' ? '16,185,129' : themeColor === 'cyan' ? '6,182,212' : themeColor === 'amber' ? '245,158,11' : '244,63,94'},0.15)]`
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  id="typeracer-input-field"
+                />
+                {/* Keycap / Escape indicator on the right side of the input bar */}
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+                  {hasError ? (
+                    <div className="text-red-500 flex items-center gap-1 cursor-help animate-bounce" title={t.errorsLabel}>
+                      <ShieldAlert size={18} />
+                    </div>
+                  ) : null}
+                  <kbd className="hidden md:inline-block px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded text-[9px] text-slate-500 font-mono shadow-sm">
+                    ESC
+                  </kbd>
+                  <span className="hidden md:inline text-[9px] text-slate-600 uppercase tracking-widest font-bold">
+                    {t.restartBtn}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bottom guidelines panel */}
+              <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono uppercase tracking-widest px-1">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${hasError ? 'bg-red-500 animate-pulse' : theme.trackColor}`}></span>
+                  <span>
+                    {hasError 
+                      ? t.errorsLabel 
+                      : t.calculatingMetrics}
+                  </span>
+                </div>
+                {gameState === 'playing' && (
+                  <span className="text-slate-400 font-bold">
+                    {userInput.length} / {currentParagraph.text.length} {t.charactersCount}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* 5. Historical Stats charts & analytics panel */}
-      <StatsPanel
-        stats={{
-          wpm: liveWpm,
-          accuracy: liveAccuracy,
-          errors: errorsCount,
-          correctChars: correctCount,
-          totalCharsTyped: totalCharsTyped,
-          timeElapsed: timeElapsed,
-        }}
-        history={history}
-        onRestart={initGame}
-        isFinished={gameState === 'finished'}
-        lang={gameLanguage}
-        onScoreSaved={() => setLeaderboardRefreshTrigger(prev => prev + 1)}
-        defaultPlayerName={playerName}
-      />
+          {/* 5. Historical Stats charts & analytics panel */}
+          <StatsPanel
+            stats={{
+              wpm: liveWpm,
+              accuracy: liveAccuracy,
+              errors: errorsCount,
+              correctChars: totalCorrectChars,
+              totalCharsTyped: totalCharsTyped,
+              timeElapsed: timeElapsed,
+            }}
+            history={history}
+            onRestart={initGame}
+            isFinished={gameState === 'finished'}
+            lang={gameLanguage}
+            onScoreSaved={() => setLeaderboardRefreshTrigger(prev => prev + 1)}
+            defaultPlayerName={playerName}
+          />
 
-      {/* 6. TOP 10 Leaderboard Panel */}
-      <Leaderboard
-        lang={gameLanguage}
-        themeColor={themeColor}
-        refreshTrigger={leaderboardRefreshTrigger}
-      />
+          {/* 6. TOP 10 Leaderboard Panel */}
+          <Leaderboard
+            lang={gameLanguage}
+            themeColor={themeColor}
+            refreshTrigger={leaderboardRefreshTrigger}
+          />
+        </>
+      ) : (
+        /* MULTIPLAYER AREA */
+        <>
+          {!multiplayerRoomId ? (
+            renderMultiplayerJoinSelector()
+          ) : gameState === 'idle' ? (
+            renderMultiplayerLobby()
+          ) : gameState === 'finished' ? (
+            <>
+              <Track
+                playerProgress={playerProgress}
+                botProgress={botProgress}
+                playerVehicle={selectedVehicle}
+                playerWpm={liveWpm}
+                botWpm={botWpm}
+                botName={BOT_CONFIGS[botLevel].name}
+                gameState={gameState}
+                lang={gameLanguage}
+                isMultiplayer={isMultiplayer}
+                multiplayerPlayers={multiplayerPlayers}
+                currentPlayerId={multiplayerPlayerId}
+              />
+              {renderMultiplayerResults()}
+            </>
+          ) : (
+            /* COUNTDOWN OR PLAYING ACTIVE RACE */
+            <>
+              <Track
+                playerProgress={playerProgress}
+                botProgress={botProgress}
+                playerVehicle={selectedVehicle}
+                playerWpm={liveWpm}
+                botWpm={botWpm}
+                botName={BOT_CONFIGS[botLevel].name}
+                gameState={gameState}
+                lang={gameLanguage}
+                isMultiplayer={isMultiplayer}
+                multiplayerPlayers={multiplayerPlayers}
+                currentPlayerId={multiplayerPlayerId}
+              />
+              
+              <div className="flex flex-col gap-6 p-6 md:p-8 rounded-3xl bg-slate-900/20 border border-slate-800 shadow-2xl relative overflow-hidden" id="playground">
+                {/* Paragraph Text Viewport */}
+                <div className="relative p-6 md:p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80">
+                  <span className="absolute -top-2.5 left-4 px-3 py-0.5 text-[9px] font-mono tracking-widest text-slate-500 uppercase bg-slate-950 border border-slate-800 rounded">
+                    {t.textSource} {currentParagraph.source}
+                  </span>
+                  {renderParagraphText()}
+                </div>
+
+                {/* Input Block / Countdown Layer */}
+                <div className="flex flex-col gap-3 relative">
+                  {gameState === 'countdown' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 rounded-2xl border border-slate-800 z-30 backdrop-blur-xs animate-pulse">
+                      <span className={`text-[10px] font-mono font-black ${theme.text} uppercase tracking-widest`}>{t.countdownReady}</span>
+                      <span className="text-5xl font-mono font-black text-white mt-1.5">{countdown}</span>
+                    </div>
+                  )}
+
+                  {/* Typing console input box */}
+                  <div className="relative">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={userInput}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      disabled={gameState !== 'playing'}
+                      placeholder={gameState === 'playing' ? t.inputPlaceholderPlaying : t.inputPlaceholderIdle}
+                      className={`w-full bg-slate-950 border-2 rounded-2xl py-5 px-6 text-xl md:text-2xl font-mono focus:outline-none transition-all pr-44 shadow-lg ${
+                        hasError
+                          ? 'border-red-500/50 text-red-300 focus:border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                          : `border-${themeColor}-500/20 text-${themeColor === 'crimson' ? 'rose' : themeColor}-400 focus:border-${themeColor === 'crimson' ? 'rose' : themeColor}-500/50 focus:shadow-[0_0_25px_rgba(${themeColor === 'emerald' ? '16,185,129' : themeColor === 'cyan' ? '6,182,212' : themeColor === 'amber' ? '245,158,11' : '244,63,94'},0.15)]`
+                      } disabled:opacity-40 disabled:cursor-not-allowed`}
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      id="typeracer-input-field"
+                    />
+                    {/* Keycap indicator */}
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+                      {hasError ? (
+                        <div className="text-red-500 flex items-center gap-1 cursor-help animate-bounce" title={t.errorsLabel}>
+                          <ShieldAlert size={18} />
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Bottom guidelines panel */}
+                  <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono uppercase tracking-widest px-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${hasError ? 'bg-red-500 animate-pulse' : theme.trackColor}`}></span>
+                      <span>
+                        {hasError 
+                          ? t.errorsLabel 
+                          : t.calculatingMetrics}
+                      </span>
+                    </div>
+                    {gameState === 'playing' && (
+                      <span className="text-slate-400 font-bold">
+                        {userInput.length} / {currentParagraph.text.length} {t.charactersCount}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       {/* --- PREMUM BACKDROP SETTINGS DRAWER / MODAL --- */}
       {showSettings && (
