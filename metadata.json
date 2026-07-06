@@ -1,0 +1,6 @@
+{
+  "name": "Typeracer",
+  "description": "A highly-polished Typeracer typing speed game in Mongolian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

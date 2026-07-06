@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Score": {
+      "title": "Typeracer Score Record",
+      "description": "Represents a completed typing race score record",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Player's display name"
+        },
+        "wpm": {
+          "type": "integer",
+          "description": "Words per minute typed"
+        },
+        "accuracy": {
+          "type": "integer",
+          "description": "Typing accuracy percentage"
+        },
+        "errors": {
+          "type": "integer",
+          "description": "Total mistakes made during the race"
+        },
+        "timeElapsed": {
+          "type": "number",
+          "description": "Total duration of typing in seconds"
+        },
+        "lang": {
+          "type": "string",
+          "enum": ["mn", "en"],
+          "description": "The language of the paragraph typed"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The date and time when the score was recorded"
+        }
+      },
+      "required": ["name", "wpm", "accuracy", "errors", "timeElapsed", "lang", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/typeracer_scores/{scoreId}": {
+      "schema": "Score",
+      "description": "Global leaderboard typing race scores"
+    }
+  }
+}

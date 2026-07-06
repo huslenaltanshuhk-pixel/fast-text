@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Match any document in the typeracer_scores collection
+    match /typeracer_scores/{scoreId} {
+      // Anyone can read scores to view the top 10 leaderboard
+      allow read: if true;
+      
+      // Players can submit their scores with basic type validation
+      allow create: if request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 25
+                    && request.resource.data.wpm is int
+                    && request.resource.data.wpm >= 0
+                    && request.resource.data.accuracy is int
+                    && request.resource.data.accuracy >= 0
+                    && request.resource.data.accuracy <= 100
+                    && request.resource.data.errors is int
+                    && request.resource.data.timeElapsed is number
+                    && request.resource.data.lang in ['mn', 'en'];
+                    
+      // Prevent editing or deleting scores once they have been posted
+      allow update, delete: if false;
+    }
+    
+    // Default fallback rules
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
