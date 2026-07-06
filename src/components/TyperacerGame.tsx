@@ -508,41 +508,14 @@ export const TyperacerGame: React.FC = () => {
     };
   }, []);
 
-  // Timer loop for tracking time and logging historical WPM data
+  // Timer loop for tracking elapsed time smoothly and continuously while typing
   useEffect(() => {
     if (gameState === 'playing' && startTime) {
       timerRef.current = setInterval(() => {
         const now = performance.now();
         const elapsed = (now - startTime) / 1000;
         setTimeElapsed(elapsed);
-
-        // Calculate current correct characters (up to the first mistake)
-        let correctCount = 0;
-        for (let i = 0; i < userInput.length; i++) {
-          if (areCharsEqual(userInput[i], currentParagraph.text[i])) {
-            correctCount++;
-          } else {
-            break; // Stop at first error
-          }
-        }
-
-        // Calculate active WPM
-        const currentWpm = elapsed > 0 ? Math.round((correctCount / 5) / (elapsed / 60)) : 0;
-        
-        // Calculate active accuracy
-        const currentAccuracy = totalCharsTyped > 0 
-          ? Math.round(((totalCharsTyped - errorsCount) / totalCharsTyped) * 100) 
-          : 100;
-
-        // Save a history point every second
-        const secIndex = Math.round(elapsed);
-        setHistory((prev) => {
-          // If we already have a point for this second, replace or just append if it's new
-          const exists = prev.some((p) => p.time === secIndex);
-          if (exists) return prev;
-          return [...prev, { time: secIndex, wpm: currentWpm, accuracy: Math.max(0, currentAccuracy) }];
-        });
-      }, 1000);
+      }, 100); // 100ms interval for precise real-time display updates
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
@@ -550,7 +523,37 @@ export const TyperacerGame: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState, startTime, userInput, totalCharsTyped, errorsCount, currentParagraph]);
+  }, [gameState, startTime]);
+
+  // Record WPM and Accuracy history point for each elapsed second
+  const roundedElapsed = Math.floor(timeElapsed);
+  useEffect(() => {
+    if (gameState !== 'playing' || roundedElapsed === 0) return;
+
+    // Calculate current correct characters (up to the first mistake)
+    let correctCount = 0;
+    for (let i = 0; i < userInput.length; i++) {
+      if (areCharsEqual(userInput[i], currentParagraph.text[i])) {
+        correctCount++;
+      } else {
+        break; // Stop at first error
+      }
+    }
+
+    // Calculate active WPM
+    const currentWpm = roundedElapsed > 0 ? Math.round((correctCount / 5) / (roundedElapsed / 60)) : 0;
+    
+    // Calculate active accuracy
+    const currentAccuracy = totalCharsTyped > 0 
+      ? Math.round(((totalCharsTyped - errorsCount) / totalCharsTyped) * 100) 
+      : 100;
+
+    setHistory((prev) => {
+      const exists = prev.some((p) => p.time === roundedElapsed);
+      if (exists) return prev;
+      return [...prev, { time: roundedElapsed, wpm: currentWpm, accuracy: Math.max(0, currentAccuracy) }];
+    });
+  }, [roundedElapsed, gameState, userInput, totalCharsTyped, errorsCount, currentParagraph]);
 
   // Bot Racer simulation loop
   useEffect(() => {
