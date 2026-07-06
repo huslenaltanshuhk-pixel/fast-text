@@ -70,7 +70,7 @@ async function startServer() {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
-    const { pathname } = new URL(request.url || "", `http://${request.headers.host}`);
+    const { pathname } = new URL(request.url || "", "http://localhost");
     if (pathname === "/ws") {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
@@ -216,7 +216,10 @@ async function startServer() {
 
             if (roomType === "custom" && roomId) {
               // Join custom room by ID
-              const cleanId = roomId.trim().toUpperCase();
+              let cleanId = roomId.replace(/\s+/g, "").toUpperCase();
+              if (!cleanId.startsWith("ROOM-")) {
+                cleanId = `ROOM-${cleanId}`;
+              }
               room = rooms.get(cleanId);
               if (!room) {
                 sendToClient(ws, {
